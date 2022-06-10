@@ -14,13 +14,12 @@ on:
   #定时触发开始编译(把下面两个#去掉开启,时间设置请看定时编译说明)
   schedule:
     - cron: 0 4 * * 5
-
   workflow_dispatch:
   push:
     branches:
-      - main
+      - master
     paths:
-      - 'Config'
+      - '-config-'
 
 env:
   Github: https://github.com/${{github.repository}}
@@ -52,53 +51,28 @@ jobs:
 
     - name: 读取脚本设置
       run: |
-        source "${GITHUB_WORKSPACE}/build/${{matrix.target}}/settings.ini"
-        echo "REPO_URL=${REPO_URL}" >> $GITHUB_ENV
-        echo "REPO_BRANCH=${REPO_BRANCH}" >> $GITHUB_ENV
-        echo "CONFIG_FILE=${CONFIG_FILE}" >> $GITHUB_ENV
-        echo "DIY_PART_SH=${DIY_PART_SH}" >> $GITHUB_ENV
-        echo "UPLOAD_FIRMWARE=${UPLOAD_FIRMWARE}" >> $GITHUB_ENV
-        echo "UPLOAD_WETRANSFER=${UPLOAD_WETRANSFER}" >> $GITHUB_ENV
-        echo "UPLOAD_RELEASE=${UPLOAD_RELEASE}" >> $GITHUB_ENV
-        echo "SERVERCHAN_SCKEY=${SERVERCHAN_SCKEY}" >> $GITHUB_ENV
-        echo "REGULAR_UPDATE=${REGULAR_UPDATE}" >> $GITHUB_ENV
-        echo "USE_CACHEWRTBUILD=${USE_CACHEWRTBUILD}" >> $GITHUB_ENV
-        echo "AUTOMATIC_AMLOGIC=${AUTOMATIC_AMLOGIC}" >> $GITHUB_ENV
-        echo "BY_INFORMATION=${BY_INFORMATION}" >> $GITHUB_ENV
-        echo "Library=${Warehouse##*/}" >> $GITHUB_ENV
-        echo "matrixtarget=${{matrix.target}}" >> $GITHUB_ENV
+        export matrixtarget="${{ matrix.target }}"
+        git clone --depth 1 -b master https://code.nextrt.com/zimonianhua/OpenWrt-Common.git ${GITHUB_WORKSPACE}/build/common
+        mv -f ${GITHUB_WORKSPACE}/build/common/*.sh ${GITHUB_WORKSPACE}/build/${{matrix.target}}/
+        chmod -R +x ${GITHUB_WORKSPACE}/build
+        source $GITHUB_WORKSPACE/build/${{matrix.target}}/common.sh && Diy_repo_url
+        source $GITHUB_WORKSPACE/build/${{matrix.target}}/common.sh && Diy_settings
     
     - name: 部署编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /usr/lib/jvm /opt/ghc
-        sudo -E apt-get -qq update -y
-        sudo -E apt-get -qq full-upgrade -y
-        sudo -E apt-get -qq install -y build-essential asciidoc binutils bzip2 gawk gettext git libncurses5-dev libz-dev patch python3 python2.7 unzip zlib1g-dev lib32gcc1 libc6-dev-i386 lib32stdc++6 subversion flex uglifyjs git-core gcc-multilib p7zip p7zip-full msmtp libssl-dev texinfo libglib2.0-dev xmlto qemu-utils upx libelf-dev autoconf automake libtool autopoint device-tree-compiler g++-multilib antlr3 gperf wget curl rename libpcap0.8-dev swig rsync
-        sudo -E apt-get -qq autoremove -y --purge
-        sudo -E apt-get -qq clean
-        sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /${{matrix.target}}
-        sudo chown $USER:$GROUPS /${{matrix.target}}
-        if [[ "${{matrix.target}}" == "openwrt_amlogic" ]]; then
-            docker rmi $(docker images -q)
-            sudo -E apt-get remove -y --purge azure-cli ghc zulu* hhvm llvm* firefox google* dotnet* powershell mysql* php* mssql-tools msodbcsql17 android*
-            sudo rm -rf /etc/mysql /etc/php /swapfile
-        fi
+        source $GITHUB_WORKSPACE/build/${{matrix.target}}/common.sh && Diy_update
     
     - name: 下载"${{matrix.target}}"源码
       working-directory: /${{matrix.target}}
       run: |
-        git clone --depth 1 -b main https://github.com/281677160/common ${GITHUB_WORKSPACE}/build/common
-        mv -f ${GITHUB_WORKSPACE}/build/common/*.sh ${GITHUB_WORKSPACE}/build/${{matrix.target}}/
-        chmod -R +x ${GITHUB_WORKSPACE}/build
         git clone -b "$REPO_BRANCH" --single-branch "$REPO_URL" openwrt
         ln -sf /${{matrix.target}}/openwrt $GITHUB_WORKSPACE/openwrt
     
     - name: 公 告
       run: |
-        cp -Rf `find ./ -maxdepth 1 -type d ! -path './openwrt' ! -path './'` openwrt
+        echo
         source $GITHUB_WORKSPACE/build/${{matrix.target}}/common.sh && Diy_variable
         source $GITHUB_WORKSPACE/build/${{matrix.target}}/common.sh && Diy_Notice
  
@@ -189,7 +163,7 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         name: OpenWrt-${{matrix.target}}
-        tag: OpenWrt-${{matrix.target}}
+        tag: ${{matrix.target}}
         token: ${{ secrets.REPO_TOKEN }}
         bodyFile: "update_log.txt"
         artifacts: "${{ env.FIRMWARE }}/*"
@@ -202,7 +176,7 @@ jobs:
       with:
         repo_token: ${{ secrets.REPO_TOKEN }}
         file: openwrt/bin/Firmware/*
-        tag: x64_test
+        tag: x64
         overwrite: true
         file_glob: true
         
@@ -212,7 +186,7 @@ jobs:
       run: |
         mkdir -p Github_Tags
         cd Github_Tags
-        wget -q --no-cookie --no-check-certificate https://api.github.com/repos/${{github.repository}}/releases/tags/AutoUpdate -O Github_Tags
+        wget -q --no-cookie --no-check-certificate https://api.github.com/repos/${{github.repository}}/releases/tags/x64 -O Github_Tags
         
     - name: 发送[在线更新固件]至云端3
       continue-on-error: true
@@ -221,7 +195,7 @@ jobs:
       with:
         repo_token: ${{ secrets.REPO_TOKEN }}
         file: Github_Tags/*
-        tag: x64_test
+        tag: x64
         overwrite: true
         file_glob: true
 
@@ -231,23 +205,23 @@ jobs:
       run: |
         if [[ "${SERVERCHAN_SCKEY}" == "TG" ]]; then
           if [[ "${{steps.compile.outcome}}" == 'failure' ]]; then
-            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的❌主人❌：您使用【${{matrix.target}}】文件夹编译的[${{ env.SOURCE }}-${{ env.TARGET_PROFILE }}]固件(${{env.Library}}仓库的#${{env.Run_number}}号)编译失败😴！(${{env.Tongzhi_Date}})" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的❌主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译失败了！😴" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'success' ]]; then
-            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人✈️：您使用【${{matrix.target}}】文件夹编译的[${{ env.SOURCE }}-${{ env.TARGET_PROFILE }}]固件(${{env.Library}}仓库的#${{env.Run_number}}号)顺利编译成功,发布云端在线更新使用的固件成功!🎈(${{env.Tongzhi_Date}})" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人✈️：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功，云端在线发布成功！🎈�" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'skipped' ]]; then
-            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人✨：您使用【${{matrix.target}}】文件夹编译的[${{ env.SOURCE }}-${{ env.TARGET_PROFILE }}]固件💐(${{env.Library}}仓库的#${{env.Run_number}}号)顺利编译完成了✌️💯！(${{env.Tongzhi_Date}})" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人✨：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功！✌️💯" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'failure' ]]; then  
-            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人❌：您使用【${{matrix.target}}】文件夹编译的[${{ env.SOURCE }}-${{ env.TARGET_PROFILE }}]固件(${{env.Library}}仓库的#${{env.Run_number}}号)顺利编译成功✌️,💥但是发布云端在线更新使用的固件失败了💥！(${{env.Tongzhi_Date}})" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
+            curl -k --data chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" --data "text=我亲爱的✨主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功✌️，💥但是云端在线发布失败了！💥" "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage"
           fi
         fi
         if [[ "${SERVERCHAN_SCKEY}" == "PUSH" ]]; then
           if [[ "${{steps.compile.outcome}}" == 'failure' ]]; then
-            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="[${{matrix.target}}]编译失败！" --data "content=我亲爱的❌主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译失败了！😴" "http://www.pushplus.plus/send"
+            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="【${{matrix.target}}】编译失败" --data "content=我亲爱的❌主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译失败了！😴" "http://www.pushplus.plus/send"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'success' ]]; then
-            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="[${{matrix.target}}]编译成功、发布成功！" --data "content=我亲爱的✨主人✈️：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功，云端在线发布成功！🎈" "http://www.pushplus.plus/send"
+            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="【${{matrix.target}}】编译成功 + 发布成功" --data "content=我亲爱的✨主人✈️：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功，云端在线发布成功！🎈�" "http://www.pushplus.plus/send"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'skipped' ]]; then
-            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="[${{matrix.target}}]编译成功！" --data "content=我亲爱的✨主人✨：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功！✌️💯" "http://www.pushplus.plus/send"
+            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="【${{matrix.target}}】编译成功" --data "content=我亲爱的✨主人✨：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功！✌️💯" "http://www.pushplus.plus/send"
           elif [[ "${{steps.compile.outcome}}" == 'success' ]] && [[ "${{steps.regular.outcome}}" == 'failure' ]]; then 
-            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="[${{matrix.target}}]编译成功、发布失败！" --data "content=我亲爱的✨主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功✌️，💥但是云端在线发布失败了！💥" "http://www.pushplus.plus/send"
+            curl -k --data token="${{ secrets.PUSH_PLUS_TOKEN }}" --data title="【${{matrix.target}}】编译成功 + 发布失败" --data "content=我亲爱的✨主人❌：您编译的OpenWrt-${{matrix.target}}固件（${{env.Library}}仓库第${{env.Run_number}}序号）编译成功✌️，💥但是云端在线发布失败了！💥" "http://www.pushplus.plus/send"
           fi
         fi
