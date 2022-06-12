@@ -11,17 +11,8 @@
 svn co https://github.com/linkease/istore/tree/main/luci/luci-app-store package/luci-app-store
 svn co https://github.com/linkease/istore-ui/tree/main/app-store-ui package/store-ui
 
-#添加kenzok8插件包
-git clone https://github.com/waynesg/OpenWrt-Software package/x64_Software
-git clone https://github.com/maddie/openwrt-tinc-1.1.git package/tinc
-git clone https://github.com/kuoruan/luci-app-frpc package/luci-app-frpc
-git clone https://github.com/alecthw/openwrt-n2n.git package/n2nx
-mv package/n2nx/luci-app-n2n_v2 package/luci-app-n2n_v2
-mv package/n2nx/n2n_v2 package/n2n_v2
-rm -rf package/n2nx
-git clone https://github.com/mwarning/zerotier-openwrt.git package/ze
-mv package/ze/zerotier package/zerotier
-rm -rf package/ze
+#添加插件包
+git clone https://code.nextrt.com/zimonianhua/Openwrt-Soft.git package/x64_Software
 
 
 cat >$NETIP <<-EOF
