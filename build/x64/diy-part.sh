@@ -7,20 +7,18 @@
 # 如果你的OP是当主路由的话，网关、DNS、广播都不需要，代码前面加 # 注释掉，只保留后台地址和子网掩码就可以
 # 如果你有编译ipv6的话，‘去掉LAN口使用内置的 IPv6 管理’代码前面也加 # 注释掉
 
-# 添加istore应用商店
-svn co https://github.com/linkease/istore/tree/main/luci/luci-app-store package/luci-app-store
-svn co https://github.com/linkease/istore-ui/tree/main/app-store-ui package/store-ui
-
+#添加bypass插件包
+git clone https://github.com/kiddin9/openwrt-bypass package/x64_Software
 #添加插件包
 git clone https://code.nextrt.com/zimonianhua/Openwrt-Soft.git package/x64_Software
 
 
 cat >$NETIP <<-EOF
-#uci set network.lan.ipaddr='10.0.0.1'                     # IPv4 地址(openwrt后台地址)
-#uci set network.lan.netmask='255.255.255.0'                  # IPv4 子网掩码
-#uci set network.lan.gateway='10.0.0.1'                    # IPv4 网关
-#uci set network.lan.broadcast='10.0.0.255'                # IPv4 广播
-#uci set network.lan.dns='10.0.0.1 10.0.0.10'          # DNS(多个DNS要用空格分开)
+uci set network.lan.ipaddr='10.0.0.1'                     # IPv4 地址(openwrt后台地址)
+uci set network.lan.netmask='255.255.255.0'                  # IPv4 子网掩码
+uci set network.lan.gateway='10.0.0.1'                    # IPv4 网关
+uci set network.lan.broadcast='10.0.0.255'                # IPv4 广播
+uci set network.lan.dns='10.0.0.1 10.0.0.10'          # DNS(多个DNS要用空格分开)
 uci set network.lan.delegate='1'                              # 去掉LAN口使用内置的 IPv6 管理(若用IPV6请把'0'改'1')
 uci set dhcp.@dnsmasq[0].filter_aaaa='0'                      # 禁止解析 IPv6 DNS记录(若用IPV6请把'1'改'0')
 uci set system.@system[0].hostname='OpenWrt-NEXTRT'            # 修改主机名称为OpenWrt-123
