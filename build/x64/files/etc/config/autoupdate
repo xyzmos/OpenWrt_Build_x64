@@ -1,7 +1,0 @@
-config login
-	option enable '0'
-	option forceupdate '0'
-	option minute '0'
-	option github 'https://github.com/xyzmos/openwrt-build/releases/tag/x64'
-	option week '6'
-	option hour '1'

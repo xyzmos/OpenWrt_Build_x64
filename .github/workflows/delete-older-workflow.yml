@@ -1,30 +1,21 @@
-name: 自动删除旧的工作流
+name: 删除workflow，清理工作流
 on:
   #定时触发开始编译(把下面两个#去掉开启,时间设置请看定时编译说明)
   schedule:
-    - cron: 0 10 * * 4
+    - cron: 50 1 * * 5
 
   workflow_dispatch:
-    inputs:
-      delete-older-workflow:
-        description: '自动删除旧的工作流'
-        required: false
-        default: 'true'           #自动删除旧的工作流（true=开启）（false=关闭）
-      rele:
-        description: '保留[X]个Releases不被删除(可改)'
-        required: true
-        default: '0'
 
 jobs:
-  del_runs:
-    runs-on: Ubuntu-20.04
+  del_workflow:
+    runs-on: Ubuntu-22.04
     name: delete-workflow-runs
     steps:
     
-      - name: 自动删除旧的工作流
+      - name: 删除workflow，清理工作流
         uses: Mattraks/delete-workflow-runs@v2
         with:
-          token: ${{ github.token }}
+          token: ${{ secrets.REPO_TOKEN }}
           repository: ${{ github.repository }}
-          retain_days: ${{ env.retain_days }}
+          retain_days: ${{ env.RETAIN_DAYS }}
           keep_minimum_runs: 0
